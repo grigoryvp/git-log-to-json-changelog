@@ -41,9 +41,10 @@ function getLogTextAsync() {
 
 
 class Commit {
-  constructor() {
+  constructor(options) {
     this.hash = '';
     this.msg = '';
+    Object.assign(this, options);
   }
   addMsgLine(line) { this.msg += this.msg.length ? "\n" + line : line; }
 }
@@ -53,13 +54,14 @@ function logTextToCommitsAsync(text) {
   return new Promise((resolve, reject) => {
 
     const commitList = [];
-    const next = () => { let v = new Commit(); commitList.push(v); return v; }
-    const cur = () => commitList.slice(-1)[0] || next();
+    const addToken = (array, v) => { array.push(v); return v; };
+    const nextToken = (options) => addToken(commitList, new Commit(options));
+    const curToken = () => commitList.slice(-1)[0] || nextToken();
 
     for(line of text.split(/\r*\n+/)) {
       patternmatch(line, [
-        [/^commit ([a-z0-9]+)$/, (hash) => (next().hash = hash)],
-        [/^    (.*)$/, (line) => cur().addMsgLine(line)],
+        [/^commit ([a-z0-9]+)$/, (hash) => nextToken({hash})],
+        [/^    (.*)$/, (line) => curToken().addMsgLine(line)],
       ]);
     }
     resolve(commitList);
@@ -83,7 +85,7 @@ class Meta {
   }
 
 
-  addChar(char) { this._separated ? this.val += char : this.key += char; }
+  add(char) { this._separated ? this.val += char : this.key += char; }
   separate() { this._separated = true; }
 }
 
@@ -92,31 +94,45 @@ function commitsToMetaAsync(commitList) {
   return new Promise((resolve, reject) => {
 
     let seq = 0;
+    let prevState = 0;
     const metaList = [];
-    const add = (array, v) => { array.push(v); return v; }
-    const next = (options) => add(metaList, new Meta(options));
-    const cur = () => metaList.slice(-1)[0] || next();
+    const addToken = (array, v) => { array.push(v); return v; };
+    const nextToken = (options) => addToken(metaList, new Meta(options));
+    const curToken = () => metaList.slice(-1)[0] || nextToken();
+    const pushState = (v) => { prevState = state; state = v; };
+    const popState = () => state = prevState;
 
-    const State = {
+    const S = {
       IDLE: 1,
-      META: 2,
-      SSTRING: 3,
-      DSTRING: 4,
-    };
-    let state = State.IDLE;
+      TOKEN: 2,
+      SINGLE: 3,
+      DOUBLE: 4,
+      ESCAPE: 5,
+    }
 
+    let state = S.IDLE;
+    S.STRING = [S.SINGLE, S.DOUBLE];
     for (commit of commitList) {
       for (var i = 0; i < commit.msg.length; i ++) {
         const hash = commit.hash;
         patternmatch([commit.msg[i], state], [
-          [['{', State.IDLE], () => {
-            state = State.META;
-            next({hash, seq: (seq += 1)});
+          [['{', S.IDLE], () => {
+            pushState(S.TOKEN);
+            nextToken({hash, seq: (seq += 1)});
           }],
-          [[';', State.META], () => next({hash, seq})],
-          [['}', [State.META]], () => state = State.IDLE],
-          [[[':', '='], State.META], () => cur().separate()],
-          [[null, [State.META]], (v) => cur().addChar(v)],
+          [[';', S.TOKEN], () => nextToken({hash, seq})],
+          [['}', [S.TOKEN]], () => pushState(S.IDLE)],
+          [[[':', '='], S.TOKEN], () => curToken().separate()],
+          [["\'", S.TOKEN], () => pushState(S.SINGLE)],
+          [["\'", S.SINGLE], () => pushState(S.TOKEN)],
+          [["\"", S.TOKEN], () => pushState(S.DOUBLE)],
+          [["\"", S.DOUBLE], () => pushState(S.TOKEN)],
+          [["\\", S.STRING], () => pushState(S.ESCAPE)],
+          [[null, [S.ESCAPE]], (char) => {
+            curToken().add(char)
+            popState();
+          }],
+          [[null, [S.TOKEN, S.STRING]], (char) => curToken().add(char)],
         ]);
       }
     }
