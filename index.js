@@ -10,7 +10,7 @@ module.exports = function(...args) {
       .then((v) => commitsToMetaAsync(v))
       .then((v) => applyAmendAsync(v))
       .then((v) => metaToJsonAsync(v))
-      .then((v) => resolve(v))
+      .then((v) => resolve(JSON.stringify(v)))
       .catch((v) => reject(v));
   });
   if (next) return promised.then((v) => next(null, v), (v) => next(v));
@@ -71,6 +71,11 @@ class Meta {
   constructor() {
     this.hash = '';
     this.key = '';
+    //  Where can be multiple chunks of meta information inside '{}', for
+    //  example "{amend:'1';msg:'foo'} some text "{amend:'2';msg:'bar'".
+    //  Chunks inside '{}' has same sequence number, so they can be
+    //  grouped later with hash and sequence.
+    this.seq = 0;
   }
 }
 
@@ -78,9 +83,10 @@ class Meta {
 function commitsToMetaAsync(commitList) {
   return new Promise((resolve, reject) => {
 
+    let seq = 0;
     const metaList = [];
     const next = () => { let v = new Meta(); metaList.push(v); return v; }
-    const cur = () => commitList.slice(-1)[0] || next();
+    const cur = () => metaList.slice(-1)[0] || next();
 
     const State = {
       IDLE: 1,
@@ -91,26 +97,14 @@ function commitsToMetaAsync(commitList) {
     for (commit of commitList) {
       for (var i = 0; i < commit.msg.length; i ++) {
         const char = commit.msg[i];
-        pmatch(char, [
-          ['{', () => {
-            pmatch(state, [
-              [State.IDLE, () => {
-                state = State.KEY;
-                next();
-              }],
-              [null, () => { throw new Error("'{' outside of IDLE"); }],
-            ]);
+        pmatch([char, state], [
+          [['{', State.IDLE], () => {
+            state = State.KEY;
+            seq += 1;
+            next().seq = seq;
           }],
-          ['}', () => {
-            pmatch(state, [
-              [State.KEY, () => state = State.IDLE],
-            ]);
-          }],
-          [null, () => {
-            pmatch(state, [
-              [State.KEY, (v) => cur().key += v],
-            ]);
-          }],
+          [['}', State.KEY], () => state = State.IDLE],
+          [[null, State.KEY], () => cur().key += char],
         ]);
       }
     }
@@ -133,20 +127,21 @@ function metaToJsonAsync(metaList) {
 }
 
 
-function pmatch(tomatch, pairs) {
-  let defaultHandler = null;
-  for ([matchwith, handler] of pairs) {
-    if (typeof(matchwith) === 'string' || typeof(matchwith) === 'number') {
-      if (matchwith === tomatch) return handler(tomatch);
-    }
-    else if (!matchwith) {
-      defaultHandler = handler;
-    }
-    else {
-      const match = tomatch.match(matchwith);
-      if (match) return handler(...match.slice(1));
-    }
+//  Pattern-matching with regexp positional matches passed to handlers.
+//  'null'/'undefined' matches anything.
+function pmatch(rightSeq, pairs) {
+  for ([leftSeq, handler] of pairs) {
+    leftSeq = [].concat(leftSeq);
+    rightSeq = [].concat(rightSeq);
+    const res = [];
+    const compare = (left, right) => {
+      if (left === null || left === undefined) return true;
+      if (!left[Symbol.match]) return left === right;
+      const match = left[Symbol.match](right);
+      if (!match) return false;
+      return res.push(...match.slice(1)), true;
+    };
+    if (leftSeq.every((v, i) => compare(v, rightSeq[i]))) return handler(res);
   }
-  if (defaultHandler) return defaultHandler(tomatch);
 }
 
