@@ -1,0 +1,4 @@
+--bail
+--check-leaks
+test/*.js
+

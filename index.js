@@ -7,7 +7,8 @@ module.exports = function(...args) {
   const promised = new Promise((resolve, reject) => {
     getLogTextAsync()
       .then((v) => logTextToCommitsAsync(v))
-      .then((v) => commitsToMetaAsync(v))
+      //  Git displays commits from last to first.
+      .then((v) => commitsToMetaAsync(v.reverse()))
       .then((v) => applyAmendAsync(v))
       .then((v) => metaToJsonAsync(v))
       .then((v) => resolve(JSON.stringify(v)))
@@ -16,6 +17,7 @@ module.exports = function(...args) {
   if (next) return promised.then((v) => next(null, v), (v) => next(v));
   return promised;
 }
+module.exports.debug = {};
 
 
 function getOptions(args) {
@@ -48,6 +50,7 @@ class Commit {
   }
   addMsgLine(line) { this.msg += this.msg.length ? "\n" + line : line; }
 }
+module.exports.debug.Commit = Commit;
 
 
 function logTextToCommitsAsync(text) {
@@ -90,6 +93,7 @@ class Meta {
 }
 
 
+module.exports.debug.commitsToMetaAsync = commitsToMetaAsync;
 function commitsToMetaAsync(commitList) {
   return new Promise((resolve, reject) => {
 
@@ -112,7 +116,7 @@ function commitsToMetaAsync(commitList) {
 
     let state = S.IDLE;
     S.STRING = [S.SINGLE, S.DOUBLE];
-    for (commit of commitList) {
+    for (const commit of commitList) {
       for (var i = 0; i < commit.msg.length; i ++) {
         const hash = commit.hash;
         patternmatch([commit.msg[i], state], [
@@ -156,8 +160,9 @@ function metaToJsonAsync(metaList) {
 
 
 //  Pattern-matching with regexp positional matches passed to handlers.
+module.exports.debug.patternmatch = patternmatch;
 function patternmatch(rightSeq, pairs) {
-  for ([leftSeq, next] of pairs) {
+  for (let [leftSeq, next] of pairs) {
     leftSeq = [].concat(leftSeq);
     rightSeq = [].concat(rightSeq);
     const res = [];
@@ -166,28 +171,15 @@ function patternmatch(rightSeq, pairs) {
       if (left === null || left === undefined) return res.push(right), true;
       //  Test case can be an array.
       if (left.some) return left.some((v) => compare(v, right));
-      if (!left[Symbol.match]) return left === right;
+      if (!left[Symbol.match]) {
+        if (left !== right) return false;
+        return res.push(right), true;
+      }
       const match = left[Symbol.match](right);
       if (!match) return false;
       return res.push(...match.slice(1)), true;
     };
     if (leftSeq.every((v, i) => compare(v, rightSeq[i]))) return next(...res);
   }
-}
-
-//  Standalone test
-if (!module.parent) {
-  Promise.resolve().then(() => {
-    const test = `{foo:bar}`;
-    return commitsToMetaAsync([new Commit({msg: test})]);
-  }).then((v) => {
-    const meta = v[0];
-    console.assert(meta.key === 'foo' && meta.val === 'bar');
-    const test = `{"{\\":\\';\\\\="}`;
-    return commitsToMetaAsync([new Commit({msg: test})]);
-  }).then((v) => {
-    const meta = v[0];
-    console.assert(meta.key === `{":';\\=`);
-  }).catch(v => console.log(`error: ${v}, ${v.stack}`));
 }
 
