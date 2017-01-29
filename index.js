@@ -179,5 +179,7 @@ function patternmatch(rightSeq, pairs) {
 if (!module.parent) {
   commitsToMetaAsync([new Commit({msg: `{foo:bar}`})])
     .then((v) => console.assert(v.key === 'foo' && v.val === 'bar'));
+  commitsToMetaAsync([new Commit({msg: `{foo}`})])
+    .then((v) => console.log(v));
 }
 
