@@ -95,7 +95,6 @@ function commitsToMetaAsync(commitList) {
       IDLE: 1,
       KEY: 2,
       VAL: 3,
-      META: [State.KEY, State.VAL],
     };
     let state = State.IDLE;
 
@@ -107,9 +106,12 @@ function commitsToMetaAsync(commitList) {
             state = State.KEY;
             next({hash, seq: (seq += 1)});
           }],
+          [[';', [State.KEY, State.VAL]], () => {
+            state = State.KEY;
+            next({hash, seq})
+          }],
           [['}', [State.KEY, State.VAL]], () => state = State.IDLE],
           [[':', State.KEY], () => state = State.VAL],
-          [[';', [State.KEY, State.VAL]], () => next({hash, seq})],
           [[null, [State.KEY, State.VAL]], (v) => cur().key += v],
         ]);
       }
