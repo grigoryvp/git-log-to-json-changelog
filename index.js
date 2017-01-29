@@ -177,9 +177,17 @@ function patternmatch(rightSeq, pairs) {
 
 //  Standalone test
 if (!module.parent) {
-  commitsToMetaAsync([new Commit({msg: `{foo:bar}`})])
-    .then((v) => console.assert(v.key === 'foo' && v.val === 'bar'));
-  commitsToMetaAsync([new Commit({msg: `{foo}`})])
-    .then((v) => console.log(v));
+  Promise.resolve().then(() => {
+    const test = `{foo:bar}`;
+    return commitsToMetaAsync([new Commit({msg: test})]);
+  }).then((v) => {
+    const meta = v[0];
+    console.assert(meta.key === 'foo' && meta.val === 'bar');
+    const test = `{"{\\":\\';\\\\="}`;
+    return commitsToMetaAsync([new Commit({msg: test})]);
+  }).then((v) => {
+    const meta = v[0];
+    console.assert(meta.key === `{":';\\=`);
+  }).catch(v => console.log(`error: ${v}, ${v.stack}`));
 }
 
