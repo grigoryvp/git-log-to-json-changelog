@@ -121,14 +121,14 @@ function commitsToMetaAsync(commitList) {
             nextToken({hash, seq: (seq += 1)});
           }],
           [[';', S.TOKEN], () => nextToken({hash, seq})],
-          [['}', [S.TOKEN]], () => pushState(S.IDLE)],
+          [['}', S.TOKEN], () => pushState(S.IDLE)],
           [[[':', '='], S.TOKEN], () => curToken().separate()],
           [["\'", S.TOKEN], () => pushState(S.SINGLE)],
           [["\'", S.SINGLE], () => pushState(S.TOKEN)],
           [["\"", S.TOKEN], () => pushState(S.DOUBLE)],
           [["\"", S.DOUBLE], () => pushState(S.TOKEN)],
           [["\\", S.STRING], () => pushState(S.ESCAPE)],
-          [[null, [S.ESCAPE]], (char) => {
+          [[null, S.ESCAPE], (char) => {
             curToken().add(char)
             popState();
           }],
