@@ -3,7 +3,13 @@
   "version": "0.0.1",
   "description": "Reads git log and returns JSON suitable to generate a changelog like CHANGELOG.md",
   "main": "index.js",
+  "engines": {
+    "node": ">=6.0"
+  },
   "repository": "git@github.com:grigoryvp/git-log-to-json-changelog.git",
   "author": "Grigory Petrov <grigory.v.p@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "promise": "^7.1.1"
+  }
 }
