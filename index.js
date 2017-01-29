@@ -95,6 +95,7 @@ function commitsToMetaAsync(commitList) {
       IDLE: 1,
       KEY: 2,
       VAL: 3,
+      META: [State.KEY, State.VAL],
     };
     let state = State.IDLE;
 
