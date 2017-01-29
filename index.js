@@ -57,7 +57,7 @@ function logTextToCommitsAsync(text) {
     const cur = () => commitList.slice(-1)[0] || next();
 
     for(line of text.split(/\r*\n+/)) {
-      pmatch(line, [
+      patternmatch(line, [
         [/^commit ([a-z0-9]+)$/, (hash) => (next().hash = hash)],
         [/^    (.*)$/, (line) => cur().addMsgLine(line)],
       ]);
@@ -68,14 +68,16 @@ function logTextToCommitsAsync(text) {
 
 
 class Meta {
-  constructor() {
+  constructor(options) {
     this.hash = '';
     this.key = '';
+    this.val = '';
     //  Where can be multiple chunks of meta information inside '{}', for
     //  example "{amend:'1';msg:'foo'} some text "{amend:'2';msg:'bar'".
     //  Chunks inside '{}' has same sequence number, so they can be
     //  grouped later with hash and sequence.
     this.seq = 0;
+    Object.assign(this, options);
   }
 }
 
@@ -85,27 +87,29 @@ function commitsToMetaAsync(commitList) {
 
     let seq = 0;
     const metaList = [];
-    const next = () => { let v = new Meta(); metaList.push(v); return v; }
+    const add = (array, v) => { array.push(v); return v; }
+    const next = (options) => add(metaList, new Meta(options));
     const cur = () => metaList.slice(-1)[0] || next();
 
     const State = {
       IDLE: 1,
       KEY: 2,
-      toKey() {
-        state = State.KEY;
-        next().seq = (seq += 1);
-      },
-      toIdle() { state = State.IDLE; },
+      VAL: 3,
     };
     let state = State.IDLE;
 
     for (commit of commitList) {
       for (var i = 0; i < commit.msg.length; i ++) {
-        const char = commit.msg[i];
-        pmatch([char, state], [
-          [['{', State.IDLE], () => State.toKey()],
-          [['}', State.KEY], () => State.toIdle()],
-          [[null, State.KEY], () => cur().key += char],
+        const hash = commit.hash;
+        patternmatch([commit.msg[i], state], [
+          [['{', State.IDLE], () => {
+            state = State.KEY;
+            next({hash, seq: (seq += 1)});
+          }],
+          [['}', [State.KEY, State.VAL]], () => state = State.IDLE],
+          [[':', State.KEY], () => state = State.VAL],
+          [[';', [State.KEY, State.VAL]], () => next({hash, seq})],
+          [[null, [State.KEY, State.VAL]], (v) => cur().key += v],
         ]);
       }
     }
@@ -129,20 +133,22 @@ function metaToJsonAsync(metaList) {
 
 
 //  Pattern-matching with regexp positional matches passed to handlers.
-//  'null'/'undefined' matches anything.
-function pmatch(rightSeq, pairs) {
-  for ([leftSeq, handler] of pairs) {
+function patternmatch(rightSeq, pairs) {
+  for ([leftSeq, next] of pairs) {
     leftSeq = [].concat(leftSeq);
     rightSeq = [].concat(rightSeq);
     const res = [];
     const compare = (left, right) => {
-      if (left === null || left === undefined) return true;
+      //  If test case not specified it's "don't care, match anything".
+      if (left === null || left === undefined) return res.push(right), true;
+      //  Test case can be an array.
+      if (left.some) return left.some((v) => compare(v, right));
       if (!left[Symbol.match]) return left === right;
       const match = left[Symbol.match](right);
       if (!match) return false;
       return res.push(...match.slice(1)), true;
     };
-    if (leftSeq.every((v, i) => compare(v, rightSeq[i]))) return handler(res);
+    if (leftSeq.every((v, i) => compare(v, rightSeq[i]))) return next(...res);
   }
 }
 
