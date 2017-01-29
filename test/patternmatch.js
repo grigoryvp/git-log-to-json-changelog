@@ -114,3 +114,32 @@ describe("patternmatch regexp", function() {
   });
 });
 
+describe("patternmatch 'anything'", function() {
+
+  it("matches single case, one sample", () => {
+    patternmatch('foo', [
+      [null, (v) => expect(v).to.equal('foo')],
+    ]);
+  });
+
+  it("matches multiple cases, one sample, equal", () => {
+    patternmatch(1, [
+      [undefined, (v) => expect(v).to.equal(1)],
+      [/bar/, (v) => assert(false)],
+    ]);
+  });
+
+  it("matches single case, multiple sample, equal", () => {
+    patternmatch('foo', [
+      [[true, null], (v) => expect(v).to.equal('foo')],
+    ]);
+  });
+
+  it("matches multiple cases, multiple sample, equal", () => {
+    patternmatch('foo', [
+      [[false, 0], (v) => assert(false)],
+      [[true, undefined], (v) => expect(v).to.equal('foo')],
+    ]);
+  });
+});
+
