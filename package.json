@@ -6,6 +6,9 @@
   "engines": {
     "node": ">=6.0"
   },
+  "bin": {
+    "git-log-to-json-changelog": "./cli.js"
+  },
   "repository": "git@github.com:grigoryvp/git-log-to-json-changelog.git",
   "author": "Grigory Petrov <grigory.v.p@gmail.com>",
   "license": "MIT",
