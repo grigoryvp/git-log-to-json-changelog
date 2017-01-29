@@ -4,9 +4,11 @@ const loader = require('./index.js');
 
 
 loader().then(json => {
-  console.log(JSON.stringify(json));
+  process.stdout.write(JSON.stringify(json));
 }).catch(v => {
-  console.log(`error: ${v}, ${v.stack}`);
+  process.stderr.write(`error\n`);
+  process.stderr.write(`${v}\n`);
+  process.stderr.write(`${v.stack}\n`);
   process.exit(1);
 });
 
