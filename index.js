@@ -77,8 +77,14 @@ class Meta {
     //  Chunks inside '{}' has same sequence number, so they can be
     //  grouped later with hash and sequence.
     this.seq = 0;
+    //  ':' or '=' was found, now reading value.
+    this._separated = false;
     Object.assign(this, options);
   }
+
+
+  addChar(char) { this._separated ? this.val += char : this.key += char; }
+  separate() { this._separated = true; }
 }
 
 
@@ -93,8 +99,9 @@ function commitsToMetaAsync(commitList) {
 
     const State = {
       IDLE: 1,
-      KEY: 2,
-      VAL: 3,
+      META: 2,
+      SSTRING: 3,
+      DSTRING: 4,
     };
     let state = State.IDLE;
 
@@ -103,16 +110,13 @@ function commitsToMetaAsync(commitList) {
         const hash = commit.hash;
         patternmatch([commit.msg[i], state], [
           [['{', State.IDLE], () => {
-            state = State.KEY;
+            state = State.META;
             next({hash, seq: (seq += 1)});
           }],
-          [[';', [State.KEY, State.VAL]], () => {
-            state = State.KEY;
-            next({hash, seq})
-          }],
-          [['}', [State.KEY, State.VAL]], () => state = State.IDLE],
-          [[':', State.KEY], () => state = State.VAL],
-          [[null, [State.KEY, State.VAL]], (v) => cur().key += v],
+          [[';', State.META], () => next({hash, seq})],
+          [['}', [State.META]], () => state = State.IDLE],
+          [[[':', '='], State.META], () => cur().separate()],
+          [[null, [State.META]], (v) => cur().addChar(v)],
         ]);
       }
     }
