@@ -91,6 +91,11 @@ function commitsToMetaAsync(commitList) {
     const State = {
       IDLE: 1,
       KEY: 2,
+      toKey() {
+        state = State.KEY;
+        next().seq = (seq += 1);
+      },
+      toIdle() { state = State.IDLE; },
     };
     let state = State.IDLE;
 
@@ -98,12 +103,8 @@ function commitsToMetaAsync(commitList) {
       for (var i = 0; i < commit.msg.length; i ++) {
         const char = commit.msg[i];
         pmatch([char, state], [
-          [['{', State.IDLE], () => {
-            state = State.KEY;
-            seq += 1;
-            next().seq = seq;
-          }],
-          [['}', State.KEY], () => state = State.IDLE],
+          [['{', State.IDLE], () => State.toKey()],
+          [['}', State.KEY], () => State.toIdle()],
           [[null, State.KEY], () => cur().key += char],
         ]);
       }
