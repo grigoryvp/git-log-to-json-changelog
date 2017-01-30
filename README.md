@@ -46,3 +46,4 @@ Following keys are supported:
 * Mark a release with short message:
   ```
   git commit -m "{release:'4.0.75', msg: 'This release introduce a high definition audio support'}"
+

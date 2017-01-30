@@ -42,17 +42,6 @@ function getLogTextAsync() {
 }
 
 
-class Commit {
-  constructor(options) {
-    this.hash = '';
-    this.msg = '';
-    Object.assign(this, options);
-  }
-  addMsgLine(line) { this.msg += this.msg.length ? "\n" + line : line; }
-}
-module.exports.debug.Commit = Commit;
-
-
 function logTextToCommitsAsync(text) {
   return new Promise((resolve, reject) => {
 
@@ -72,31 +61,11 @@ function logTextToCommitsAsync(text) {
 }
 
 
-class Meta {
-  constructor(options) {
-    this.hash = '';
-    this.key = '';
-    this.val = '';
-    //  Where can be multiple chunks of meta information inside '{}', for
-    //  example "{amend:'1';msg:'foo'} some text "{amend:'2';msg:'bar'".
-    //  Chunks inside '{}' has same sequence number, so they can be
-    //  grouped later with hash and sequence.
-    this.seq = 0;
-    //  ':' or '=' was found, now reading value.
-    this._separated = false;
-    Object.assign(this, options);
-  }
-
-
-  add(char) { this._separated ? this.val += char : this.key += char; }
-  separate() { this._separated = true; }
-}
-
-
 module.exports.debug.commitsToMetaAsync = commitsToMetaAsync;
 function commitsToMetaAsync(commitList) {
   return new Promise((resolve, reject) => {
 
+    let sib = 0;
     let seq = 0;
     let prevState = 0;
     const metaList = [];
@@ -117,14 +86,15 @@ function commitsToMetaAsync(commitList) {
     let state = S.IDLE;
     S.STRING = [S.SINGLE, S.DOUBLE];
     for (const commit of commitList) {
+      seq ++;
       for (var i = 0; i < commit.msg.length; i ++) {
         const hash = commit.hash;
         patternmatch([commit.msg[i], state], [
           [['{', S.IDLE], () => {
             pushState(S.TOKEN);
-            nextToken({hash, seq: (seq += 1)});
+            nextToken({hash, seq, sib: (sib += 1)});
           }],
-          [[';', S.TOKEN], () => nextToken({hash, seq})],
+          [[';', S.TOKEN], () => nextToken({hash, sib})],
           [['}', S.TOKEN], () => pushState(S.IDLE)],
           [[[':', '='], S.TOKEN], () => curToken().separate()],
           [["\'", S.TOKEN], () => pushState(S.SINGLE)],
@@ -145,8 +115,20 @@ function commitsToMetaAsync(commitList) {
 }
 
 
+module.exports.debug.applyAmendAsync = applyAmendAsync;
 function applyAmendAsync(metaList) {
   return new Promise((resolve, reject) => {
+    const toAmend = []
+    for(const meta of metaList) {
+      if (meta.key === 'amend') {
+        //  sibling metas (inside same '{}') amends that hash
+        const isSibling = (v) => v.hash === meta.hash && v.sib === meta.sib;
+        toAmend.push({
+          hash: meta.val,
+          siblings: metaList.filter((v) => isSibling(v) && v.key !== 'amend'),
+        });
+      }
+    }
     resolve(metaList);
   });
 }
@@ -182,4 +164,39 @@ function patternmatch(rightSeq, pairs) {
     if (leftSeq.every((v, i) => compare(v, rightSeq[i]))) return next(...res);
   }
 }
+
+
+class Commit {
+  constructor(options) {
+    this.hash = '';
+    this.msg = '';
+    Object.assign(this, options);
+  }
+  addMsgLine(line) { this.msg += this.msg.length ? "\n" + line : line; }
+}
+module.exports.debug.Commit = Commit;
+
+
+class Meta {
+  constructor(options) {
+    this.hash = '';
+    this.key = '';
+    this.val = '';
+    //  Where can be multiple chunks of meta information inside '{}', for
+    //  example "{amend:'1';msg:'foo'} some text "{amend:'2';msg:'bar'".
+    //  Chunks inside '{}' has same sibling number, so they can be
+    //  grouped later.
+    this.sib = 0;
+    //  Incremented with each commit.
+    this.seq = 0;
+    //  ':' or '=' was found, now reading value.
+    this._separated = false;
+    Object.assign(this, options);
+  }
+
+
+  add(char) { this._separated ? this.val += char : this.key += char; }
+  separate() { this._separated = true; }
+}
+module.exports.debug.Meta = Meta;
 
