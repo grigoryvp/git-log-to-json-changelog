@@ -137,7 +137,6 @@ function addTagsToCommits(commitList, tags, tagsToHashes) {
       ]);
     }
 
-    console.log(commitList.filter(v => v.metaList.length > 0));
     resolve(commitList);
   });
 }
