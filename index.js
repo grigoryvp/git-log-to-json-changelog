@@ -17,14 +17,20 @@ const Promise = require('promise');
 module.exports = function(...args) {
   const {options, next} = getOptions(args);
   const promised = new Promise((resolve, reject) => {
-    getLogTextAsync()
-      .then((v) => logTextToCommitsAsync(v))
-      //  Git displays commits from last to first.
-      .then((v) => readMetaAsync(v.reverse()))
-      .then((v) => applyAmendAsync(v))
-      .then((v) => metaToJsonAsync(v))
-      .then((v) => resolve(JSON.stringify(v)))
-      .catch((v) => reject(v));
+    return Promise.all([
+      getLogTextAsync(),
+      getTagTextAsync(),
+      getTagHashesAsync(),
+    ]).then(([log, tags, tagsToHashes]) => {
+      return new Promise.resolve([])
+        .then((v) => addLogToCommits(v, log))
+        .then((v) => addTagsToCommits(v, tags, tagsToHashes))
+        //  Git displays commits from last to first.
+        .then((v) => readMetaAsync(v.reverse()))
+        .then((v) => applyAmendAsync(v))
+        .then((v) => metaToJsonAsync(v))
+        .then((v) => resolve(JSON.stringify(v)))
+    }).catch((v) => reject(v));
   });
   if (next) return promised.then((v) => next(null, v), (v) => next(v));
   return promised;
@@ -47,17 +53,47 @@ function getLogTextAsync() {
     task.stdout.on('data', (v) => data += v);
     task.on('error', (v) => reject(v));
     task.on('close', (code) => {
-      if (code !== 0) return reject(`git failed with code ${code}`);
+      if (code !== 0) return reject(`git log failed with code ${code}`);
       resolve(data);
     });
   });
 }
 
 
-function logTextToCommitsAsync(text) {
+function getTagTextAsync() {
+  return new Promise((resolve, reject) => {
+    const stdio = ['ignore', 'pipe', process.stderr];
+    const task = spawn('git', ['tag', '-n999'], {stdio});
+    let data = '';
+    task.stdout.on('data', (v) => data += v);
+    task.on('error', (v) => reject(v));
+    task.on('close', (code) => {
+      if (code !== 0) return reject(`git tag failed with code ${code}`);
+      resolve(data);
+    });
+  });
+}
+
+
+function getTagHashesAsync() {
+  return new Promise((resolve, reject) => {
+    const stdio = ['ignore', 'pipe', process.stderr];
+    const task = spawn('git', ['show-ref', '--tags', '-d'], {stdio});
+    let data = '';
+    task.stdout.on('data', (v) => data += v);
+    task.on('error', (v) => reject(v));
+    task.on('close', (code) => {
+      //! Will exit(1) if no tags exist.
+      if (code !== 0) return resolve('');
+      resolve(data);
+    });
+  });
+}
+
+
+function addLogToCommits(commitList, text) {
   return new Promise((resolve, reject) => {
 
-    const commitList = [];
     const addToken = (array, v) => { array.push(v); return v; };
     const nextToken = (options) => addToken(commitList, new Commit(options));
     const curToken = () => commitList.slice(-1)[0] || nextToken();
@@ -68,6 +104,40 @@ function logTextToCommitsAsync(text) {
         [/^    (.*)$/, (line) => curToken().addMsgLine(line)],
       ]);
     }
+    resolve(commitList);
+  });
+}
+
+
+function addTagsToCommits(commitList, tags, tagsToHashes) {
+  return new Promise((resolve, reject) => {
+
+    hashForTag = {};
+    for(line of tagsToHashes.split(/\r*\n+/)) {
+      patternmatch(line, [
+        [/^([a-z0-9]+) refs\/tags\/([^ ]+)\^\{\}$/, (hash, tag) => {
+          hashForTag[tag] = hash
+        }],
+      ]);
+    }
+
+    curCommit = null;
+    for(line of tags.split(/\r*\n+/)) {
+      patternmatch(line, [
+        [/^([^ ]+)\s+(.*)$/, (tag, msg) => {
+          if (!curCommit) {
+            const hash = hashForTag[tag];
+            curCommit = commitList.filter((v) => v.hash === hash)[0];
+          }
+          if (curCommit) curCommit.msg += "\n" + msg;
+        }],
+        [/^\s+(.*)$/, (msg) => {
+          if (curCommit) curCommit.msg += "\n" + msg;
+        }],
+      ]);
+    }
+
+    console.log(commitList.filter(v => v.metaList.length > 0));
     resolve(commitList);
   });
 }
