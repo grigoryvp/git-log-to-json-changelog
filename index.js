@@ -1,3 +1,15 @@
+//  Thing in curly braces is called meta, ex git log message
+//  "foo {bar:1} {baz:2}" has two meta's and "foo {bar:1;baz:2}" has a
+//  compound meta. Individual metas in compound meta affects each over, ex
+//  'amend' will amend only key-values from compound meta it is in.
+//
+//  The only implementation challenge is 'amend' logic. What to do if
+//  specified commit does not have a meta with specified key, or does not
+//  have any meta at all? If we want an ability to add something via
+//  'amend' AND an ability to keep a sequence order of commits (and we
+//  want in order to track releases) when we need to keep a list of all
+//  commits with attached metas instead of just list of metas.
+
 const spawn = require('child_process').spawn;
 const Promise = require('promise');
 
@@ -8,7 +20,7 @@ module.exports = function(...args) {
     getLogTextAsync()
       .then((v) => logTextToCommitsAsync(v))
       //  Git displays commits from last to first.
-      .then((v) => commitsToMetaAsync(v.reverse()))
+      .then((v) => readMetaAsync(v.reverse()))
       .then((v) => applyAmendAsync(v))
       .then((v) => metaToJsonAsync(v))
       .then((v) => resolve(JSON.stringify(v)))
@@ -61,19 +73,12 @@ function logTextToCommitsAsync(text) {
 }
 
 
-module.exports.debug.commitsToMetaAsync = commitsToMetaAsync;
-function commitsToMetaAsync(commitList) {
+module.exports.debug.readMetaAsync = readMetaAsync;
+function readMetaAsync(commitList) {
   return new Promise((resolve, reject) => {
 
-    let sib = 0;
     let seq = 0;
     let prevState = 0;
-    const metaList = [];
-    const addToken = (array, v) => { array.push(v); return v; };
-    const nextToken = (options) => addToken(metaList, new Meta(options));
-    const curToken = () => metaList.slice(-1)[0] || nextToken();
-    const pushState = (v) => { prevState = state; state = v; };
-    const popState = () => state = prevState;
 
     const S = {
       IDLE: 1,
@@ -87,14 +92,21 @@ function commitsToMetaAsync(commitList) {
     S.STRING = [S.SINGLE, S.DOUBLE];
     for (const commit of commitList) {
       seq ++;
+
+      const addToken = (array, v) => { array.push(v); return v; };
+      const nextToken = (v) => addToken(commit.metaList, new Meta(v));
+      const curToken = () => commit.metaList.slice(-1)[0] || nextToken();
+      const pushState = (v) => { prevState = state; state = v; };
+      const popState = () => state = prevState;
+
       for (var i = 0; i < commit.msg.length; i ++) {
         const hash = commit.hash;
         patternmatch([commit.msg[i], state], [
           [['{', S.IDLE], () => {
             pushState(S.TOKEN);
-            nextToken({hash, seq, sib: (sib += 1)});
+            nextToken({hash, seq: (seq += 1)});
           }],
-          [[';', S.TOKEN], () => nextToken({hash, sib})],
+          [[';', S.TOKEN], () => nextToken({hash, seq})],
           [['}', S.TOKEN], () => pushState(S.IDLE)],
           [[[':', '='], S.TOKEN], () => curToken().separate()],
           [["\'", S.TOKEN], () => pushState(S.SINGLE)],
@@ -110,33 +122,58 @@ function commitsToMetaAsync(commitList) {
         ]);
       }
     }
-    resolve(metaList);
+    resolve(commitList);
   });
 }
 
 
 module.exports.debug.applyAmendAsync = applyAmendAsync;
-function applyAmendAsync(metaList) {
+function applyAmendAsync(commitList) {
   return new Promise((resolve, reject) => {
-    const toAmend = []
-    for(const meta of metaList) {
-      if (meta.key === 'amend') {
-        //  sibling metas (inside same '{}') amends that hash
-        const isSibling = (v) => v.hash === meta.hash && v.sib === meta.sib;
-        toAmend.push({
-          hash: meta.val,
-          siblings: metaList.filter((v) => isSibling(v) && v.key !== 'amend'),
-        });
+
+    for (const commit of commitList) {
+      for (const meta of commit.metaList) {
+        if (meta.key === 'amend') {
+          for (const subMeta of commit.metaList) {
+            if (subMeta.key === 'amend') continue;
+            if (subMeta.seq !== meta.seq) continue;
+            const hashToAmend = meta.val;
+            amend(commitList, hashToAmend, subMeta.key, subMeta.val);
+          }
+        }
       }
     }
-    resolve(metaList);
+
+    resolve(commitList);
   });
 }
 
 
-function metaToJsonAsync(metaList) {
+//  In given commit list find all commit with the given hash and for all
+//  metas of such commits replace val of metas with specified key.
+function amend(commitList, hash, key, val) {
+  for (const commit of commitList.filter((v) => v.hash === hash)) {
+    let maxSeq = 0;
+    let isAmended = false;
+    for (const meta of commit.metaList) {
+      if (meta.seq > 0) maxSeq = meta.seq;
+      //  Amend by modifying existing meta.
+      if (meta.key === key) {
+        meta.val = val;
+        isAmended = true;
+      }
+    }
+    if (!isAmended) {
+      //  Amend by adding a new meta.
+      commit.metaList.push(new Meta({seq: maxSeq + 1, hash, key, val}));
+    }
+  }
+}
+
+
+function metaToJsonAsync(commitList) {
   return new Promise((resolve, reject) => {
-    resolve(metaList);
+    resolve(commitList);
   });
 }
 
@@ -170,6 +207,7 @@ class Commit {
   constructor(options) {
     this.hash = '';
     this.msg = '';
+    this.metaList = [];
     Object.assign(this, options);
   }
   addMsgLine(line) { this.msg += this.msg.length ? "\n" + line : line; }
@@ -182,12 +220,7 @@ class Meta {
     this.hash = '';
     this.key = '';
     this.val = '';
-    //  Where can be multiple chunks of meta information inside '{}', for
-    //  example "{amend:'1';msg:'foo'} some text "{amend:'2';msg:'bar'".
-    //  Chunks inside '{}' has same sibling number, so they can be
-    //  grouped later.
-    this.sib = 0;
-    //  Incremented with each commit.
+    //  Submetas in compound meta has same sequence number.
     this.seq = 0;
     //  ':' or '=' was found, now reading value.
     this._separated = false;
