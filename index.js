@@ -242,7 +242,27 @@ function amend(commitList, hash, key, val) {
 
 function metaToJsonAsync(commitList) {
   return new Promise((resolve, reject) => {
-    resolve(commitList);
+
+    const releases = [];
+    let curRelease = null;
+    const makeNewRelease = () => curRelease = {type: 'latest', msgList: []};
+
+    for (const commit of commitList) {
+      for (const meta of commit.metaList) {
+        switch (meta.key) {
+          case 'msg':
+            curRelease.msgList.push(meta.val);
+            break;
+          case 'release':
+            curRelease.type = 'named';
+            curRelease.name = meta.val;
+            makeNewRelease();
+            break;
+        }
+      }
+    }
+
+    resolve(releases);
   });
 }
 
