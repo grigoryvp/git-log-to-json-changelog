@@ -29,7 +29,7 @@ module.exports = function(...args) {
         .then((v) => readMetaAsync(v.reverse()))
         .then((v) => applyAmendAsync(v))
         .then((v) => metaToJsonAsync(v))
-        .then((v) => resolve(JSON.stringify(v)))
+        .then((v) => resolve(v))
     }).catch((v) => reject(v));
   });
   if (next) return promised.then((v) => next(null, v), (v) => next(v));
