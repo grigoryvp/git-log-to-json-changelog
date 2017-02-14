@@ -244,8 +244,12 @@ function metaToJsonAsync(commitList) {
   return new Promise((resolve, reject) => {
 
     const releases = [];
-    const makeNewRelease = () => ({type: 'latest', msgList: []});
-    let curRelease = makeNewRelease();
+    let curRelease = null;
+    const makeNewRelease = () => {
+      curRelease = {type: 'latest', msgList: []}
+      releases.push(curRelease);
+    };
+    makeNewRelease();
 
     for (const commit of commitList) {
       for (const meta of commit.metaList) {
@@ -256,8 +260,7 @@ function metaToJsonAsync(commitList) {
           case 'release':
             curRelease.type = 'named';
             curRelease.name = meta.val;
-            releases.push(curRelease);
-            curRelease = makeNewRelease();
+            makeNewRelease();
             break;
         }
       }
