@@ -246,7 +246,7 @@ function metaToJsonAsync(commitList) {
     const releases = [];
     let curRelease = null;
     const makeNewRelease = () => {
-      curRelease = {type: 'latest', msgList: []}
+      curRelease = {isNamed: false, msgList: []}
       releases.push(curRelease);
     };
     makeNewRelease();
@@ -258,7 +258,7 @@ function metaToJsonAsync(commitList) {
             curRelease.msgList.push(meta.val);
             break;
           case 'release':
-            curRelease.type = 'named';
+            curRelease.isNamed = true;
             curRelease.name = meta.val;
             makeNewRelease();
             break;
