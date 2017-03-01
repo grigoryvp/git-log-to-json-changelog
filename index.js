@@ -240,6 +240,7 @@ function amend(commitList, hash, key, val) {
 }
 
 
+module.exports.debug.metaToJsonAsync = metaToJsonAsync;
 function metaToJsonAsync(commitList) {
   return new Promise((resolve, reject) => {
 

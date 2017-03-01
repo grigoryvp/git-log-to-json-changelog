@@ -9,11 +9,11 @@ describe("amend meta", () => {
   it("should amend single meta", (next) => {
     const commitList = [
       new Commit({hash: '123', metaList: [
-        new Meta({hash: '123', key: 'foo', val: 'bar', sib: 1}),
+        new Meta({hash: '123', key: 'foo', val: 'bar', seq: 1}),
       ]}),
       new Commit({hash: '124', metaList: [
-        new Meta({hash: '124', key: 'amend', val: '123', sib: 0}),
-        new Meta({hash: '124', key: 'foo', val: 'baz', sib: 0}),
+        new Meta({hash: '124', key: 'amend', val: '123', seq: 0}),
+        new Meta({hash: '124', key: 'foo', val: 'baz', seq: 0}),
       ]}),
     ];
     applyAmendAsync(commitList).then((commitList) => {
