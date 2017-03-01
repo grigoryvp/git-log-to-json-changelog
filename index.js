@@ -253,16 +253,32 @@ function metaToJsonAsync(commitList) {
     makeNewRelease();
 
     for (const commit of commitList) {
+      let msg = null;
+      let release = null;
+      let isAmend = false;
       for (const meta of commit.metaList) {
         switch (meta.key) {
           case 'msg':
-            curRelease.msgList.push(meta.val);
+            //! If commit has multiple {msg:...}, which is meaningless,
+            //  use last one.
+            msg = meta.val;
             break;
           case 'release':
-            curRelease.isNamed = true;
-            curRelease.name = meta.val;
-            makeNewRelease();
+            release = meta.val
             break;
+          case 'amend':
+            isAmend = true;
+            break;
+        }
+      }
+      if (!isAmend) {
+        if (msg) {
+          curRelease.msgList.push(msg);
+        }
+        if (release) {
+          curRelease.isNamed = true;
+          curRelease.name = release;
+          makeNewRelease();
         }
       }
     }
