@@ -13,6 +13,8 @@ describe("commit message parser", () => {
       expect(meta).to.have.property('key').equal('foo');
       expect(meta).to.have.property('val').equal('bar');
       next();
+    }).catch((err) => {
+      next(new Error(err));
     });
   });
 
@@ -23,6 +25,8 @@ describe("commit message parser", () => {
       const meta = commitList[0].metaList[0];
       expect(meta).to.have.property('key').equal(`{":';\\=`);
       next();
+    }).catch((err) => {
+      next(new Error(err));
     });
   });
 });

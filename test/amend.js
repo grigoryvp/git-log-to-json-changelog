@@ -22,6 +22,8 @@ describe("amend meta", () => {
       expect(meta).to.have.property('key').equal('foo');
       expect(meta).to.have.property('val').equal('baz');
       next();
+    }).catch((err) => {
+      next(new Error(err));
     });
   });
 });
