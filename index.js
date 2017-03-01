@@ -335,11 +335,13 @@ class Meta {
     //  ':' or '=' was found, now reading value.
     this._separated = false;
     Object.assign(this, options);
+    //! Keys are compared to each other, so ignore space chars.
+    this.key = this.key.trim();
   }
 
 
   add(char) { this._separated ? this.val += char : this.key += char; }
-  separate() { this._separated = true; }
+  separate() { this._separated = true; this.key = this.key.trim(); }
 }
 module.exports.debug.Meta = Meta;
 
