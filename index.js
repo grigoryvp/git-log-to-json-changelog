@@ -125,10 +125,8 @@ function addTagsToCommits(commitList, tags, tagsToHashes) {
     for(line of tags.split(/\r*\n+/)) {
       patternmatch(line, [
         [/^([^ ]+)\s+(.*)$/, (tag, msg) => {
-          if (!curCommit) {
-            const hash = hashForTag[tag];
-            curCommit = commitList.filter((v) => v.hash === hash)[0];
-          }
+          const hash = hashForTag[tag];
+          curCommit = commitList.filter((v) => v.hash === hash)[0];
           if (curCommit) curCommit.msg += "\n" + msg;
         }],
         [/^\s+(.*)$/, (msg) => {
@@ -245,12 +243,15 @@ function metaToJsonAsync(commitList) {
   return new Promise((resolve, reject) => {
 
     const releases = [];
-    let curRelease = null;
-    const makeNewRelease = () => {
-      curRelease = {isNamed: false, msgList: []}
-      releases.push(curRelease);
+    let _curRelease = null;
+    const curRelease = () => {
+      if (!_curRelease) {
+        _curRelease = {isNamed: false, msgList: []}
+        releases.push(_curRelease);
+      }
+      return _curRelease;
     };
-    makeNewRelease();
+    const sealCurRelease = () => _curRelease = null;
 
     for (const commit of commitList) {
       let msg = null;
@@ -273,12 +274,12 @@ function metaToJsonAsync(commitList) {
       }
       if (!isAmend) {
         if (msg) {
-          curRelease.msgList.push(msg);
+          curRelease().msgList.push(msg);
         }
         if (release) {
-          curRelease.isNamed = true;
-          curRelease.name = release;
-          makeNewRelease();
+          curRelease().isNamed = true;
+          curRelease().name = release;
+          sealCurRelease();
         }
       }
     }
