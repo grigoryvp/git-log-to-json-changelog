@@ -1,6 +1,6 @@
 {
   "name": "git-log-to-json-changelog",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Reads git log and returns JSON suitable to generate a changelog like CHANGELOG.md",
   "main": "index.js",
   "engines": {
