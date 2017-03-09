@@ -14,7 +14,7 @@ describe("json generator", () => {
         new Meta({hash: '123', key: 'msg', val: 'bar', seq: 2}),
       ]}),
     ];
-    metaToJsonAsync(commitList).then((releaseList) => {
+    metaToJsonAsync(commitList, {}).then((releaseList) => {
       expect(releaseList).not.empty;
       const release = releaseList[0];
       expect(release).to.have.property('msgList').with.length(1);

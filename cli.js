@@ -3,7 +3,7 @@
 const loader = require('./index.js');
 
 
-loader().then(json => {
+loader({fromOldToNew: false}).then(json => {
   process.stdout.write(JSON.stringify(json) + "\n");
 }).catch(v => {
   process.stderr.write(`error\n`);

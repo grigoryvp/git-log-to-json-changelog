@@ -28,7 +28,7 @@ module.exports = function(...args) {
         //  Git displays commits from last to first.
         .then((v) => readMetaAsync(v.reverse()))
         .then((v) => applyAmendAsync(v))
-        .then((v) => metaToJsonAsync(v))
+        .then((v) => metaToJsonAsync(v, options))
         .then((v) => resolve(v))
     }).catch((v) => reject(v));
   });
@@ -40,8 +40,12 @@ module.exports.debug = {};
 
 function getOptions(args) {
   let first = args.shift() || {};
-  if (typeof(first) === 'function') return {options: {}, next: first};
-  return {options: first, next: args.shift()};
+  let options = {
+    fromOldToNew: true,
+  };
+  if (typeof(first) === 'function') return {options, next: first};
+  options = Object.assign({}, first, options);
+  return {options, next: args.shift()};
 }
 
 
@@ -239,7 +243,7 @@ function amend(commitList, hash, key, val) {
 
 
 module.exports.debug.metaToJsonAsync = metaToJsonAsync;
-function metaToJsonAsync(commitList) {
+function metaToJsonAsync(commitList, options) {
   return new Promise((resolve, reject) => {
 
     const releases = [];
@@ -284,6 +288,7 @@ function metaToJsonAsync(commitList) {
       }
     }
 
+    if (!options.fromOldToNew) releases.reverse();
     resolve(releases);
   });
 }
