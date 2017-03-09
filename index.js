@@ -159,10 +159,11 @@ function readMetaAsync(commitList) {
       ESCAPE: 5,
     }
 
-    let state = S.IDLE;
     S.STRING = [S.SINGLE, S.DOUBLE];
     for (const commit of commitList) {
       seq ++;
+
+      let state = S.IDLE;
 
       const addToken = (array, v) => { array.push(v); return v; };
       const nextToken = (v) => addToken(commit.metaList, new Meta(v));
