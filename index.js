@@ -44,7 +44,7 @@ function getOptions(args) {
     fromOldToNew: true,
   };
   if (typeof(first) === 'function') return {options, next: first};
-  options = Object.assign({}, first, options);
+  options = Object.assign({}, options, first);
   return {options, next: args.shift()};
 }
 
