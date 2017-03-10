@@ -131,10 +131,10 @@ function addTagsToCommits(commitList, tags, tagsToHashes) {
         [/^([^ ]+)\s+(.*)$/, (tag, msg) => {
           const hash = hashForTag[tag];
           curCommit = commitList.filter((v) => v.hash === hash)[0];
-          if (curCommit) curCommit.msg += "\n" + msg;
+          if (curCommit) curCommit.tag = msg;
         }],
         [/^\s+(.*)$/, (msg) => {
-          if (curCommit) curCommit.msg += "\n" + msg;
+          if (curCommit) curCommit.tag += "\n" + msg;
         }],
       ]);
     }
@@ -171,28 +171,33 @@ function readMetaAsync(commitList) {
       const pushState = (v) => { prevState = state; state = v; };
       const popState = () => state = prevState;
 
-      for (var i = 0; i < commit.msg.length; i ++) {
-        const hash = commit.hash;
-        patternmatch([commit.msg[i], state], [
-          [['{', S.IDLE], () => {
-            pushState(S.TOKEN);
-            nextToken({hash, seq: (seq += 1)});
-          }],
-          [[';', S.TOKEN], () => nextToken({hash, seq})],
-          [['}', S.TOKEN], () => pushState(S.IDLE)],
-          [[[':', '='], S.TOKEN], () => curToken().separate()],
-          [["\'", S.TOKEN], () => pushState(S.SINGLE)],
-          [["\'", S.SINGLE], () => pushState(S.TOKEN)],
-          [["\"", S.TOKEN], () => pushState(S.DOUBLE)],
-          [["\"", S.DOUBLE], () => pushState(S.TOKEN)],
-          [["\\", S.STRING], () => pushState(S.ESCAPE)],
-          [[null, S.ESCAPE], (char) => {
-            curToken().add(char)
-            popState();
-          }],
-          [[null, [S.TOKEN, S.STRING]], (char) => curToken().add(char)],
-        ]);
+      function strToMeta(options) {
+        for (var i = 0; i < options.str.length; i ++) {
+          const {hash, isFromTag} = options;
+          patternmatch([options.str[i], state], [
+            [['{', S.IDLE], () => {
+              pushState(S.TOKEN);
+              nextToken({hash, seq: (seq += 1), isFromTag});
+            }],
+            [[';', S.TOKEN], () => nextToken({hash, seq, isFromTag})],
+            [['}', S.TOKEN], () => pushState(S.IDLE)],
+            [[[':', '='], S.TOKEN], () => curToken().separate()],
+            [["\'", S.TOKEN], () => pushState(S.SINGLE)],
+            [["\'", S.SINGLE], () => pushState(S.TOKEN)],
+            [["\"", S.TOKEN], () => pushState(S.DOUBLE)],
+            [["\"", S.DOUBLE], () => pushState(S.TOKEN)],
+            [["\\", S.STRING], () => pushState(S.ESCAPE)],
+            [[null, S.ESCAPE], (char) => {
+              curToken().add(char)
+              popState();
+            }],
+            [[null, [S.TOKEN, S.STRING]], (char) => curToken().add(char)],
+          ]);
+        }
       }
+
+      strToMeta({str: commit.msg, hash: commit.hash, isFromTag: false});
+      strToMeta({str: commit.tag, hash: commit.hash, isFromTag: true});
     }
     resolve(commitList);
   });
@@ -262,6 +267,7 @@ function metaToJsonAsync(commitList, options) {
       let msg = null;
       let release = null;
       let isAmend = false;
+      let isReleaseFromTag = false;
       for (const meta of commit.metaList) {
         switch (meta.key) {
           case 'msg':
@@ -271,17 +277,21 @@ function metaToJsonAsync(commitList, options) {
             break;
           case 'release':
             release = meta.val
+            isReleaseFromTag = meta.isFromTag;
             break;
           case 'amend':
             isAmend = true;
             break;
         }
       }
-      if (!isAmend) {
-        if (msg) {
+
+      if (msg) {
+        if (!isAmend) {
           curRelease().msgList.push(msg);
         }
-        if (release) {
+      }
+      if (release) {
+        if (!isAmend || isReleaseFromTag) {
           curRelease().isNamed = true;
           curRelease().name = release;
           sealCurRelease();
@@ -324,6 +334,7 @@ class Commit {
   constructor(options) {
     this.hash = '';
     this.msg = '';
+    this.tag = '';
     this.metaList = [];
     Object.assign(this, options);
   }
@@ -341,6 +352,9 @@ class Meta {
     this.seq = 0;
     //  ':' or '=' was found, now reading value.
     this._separated = false;
+    //  'true' if was created from tag, so can be safely processed even
+    //  if attached to commits with 'amend'.
+    this.isFromTag = false;
     Object.assign(this, options);
     //! Keys are compared to each other, so ignore space chars.
     this.key = this.key.trim();
