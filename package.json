@@ -13,11 +13,11 @@
   "author": "Grigory Petrov <grigory.v.p@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "promise": "^7.1.1"
+    "promise": "^8.1.0"
   },
   "devDependencies": {
-    "chai": "^3.5.0",
-    "mocha": "^3.2.0"
+    "chai": "^4.3.6",
+    "mocha": "^9.2.2"
   },
   "scripts": {
     "test": "mocha"
